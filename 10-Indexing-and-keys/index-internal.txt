@@ -1,0 +1,297 @@
+SCENARIO
+--------
+
+Disk size: 5 MB (purely database ke liye)
+Table: student(rno INT PRIMARY KEY, name VARCHAR(32), per FLOAT, city VARCHAR(32))
+
+Assume:
+    Page size = 4 KB (4096 bytes)
+    Total disk = 5 MB = 5 * 1024 * 1024 = 5,242,880 bytes
+
+Number of pages (blocks):
+    5,242,880 / 4096 ≈ 1280 pages
+
+So database ke paas 1280 fixed-size pages hain.
+
+
+--------------------------------------------------------
+1) DISK KA STRUCTURE (HIGH LEVEL)
+--------------------------------------------------------
+
+Disk file ko pages me divide kiya jata hai.
+
+Page 0     → File header / metadata
+Page 1     → System info
+Page 2-??  → Table data pages (heap)
+Page ??    → Index pages (B-Tree pages)
+
+Har page ka fixed size hota hai (4KB in this example).
+
+Page structure roughly:
+
++----------------------+
+| Page Header          |
+| Page Metadata        |
+| Row Data / Entries   |
+| Free Space           |
+| Page Trailer         |
++----------------------+
+
+
+--------------------------------------------------------
+2) TABLE DATA KA STORAGE (HEAP STRUCTURE)
+--------------------------------------------------------
+
+Student table ke records heap me stored hote hain.
+Heap matlab: unsorted, insertion order ya free space ke hisaab se.
+
+Example record:
+
+rno INT        → 4 bytes
+per FLOAT      → 4 bytes
+name VARCHAR   → 1 or 2 byte length + actual chars
+city VARCHAR   → 1 or 2 byte length + actual chars
+
+Suppose:
+    name = 'aaa' (3 chars)
+    city = 'Pune' (4 chars)
+
+Storage:
+
+rno         = 4 bytes
+per         = 4 bytes
+name len    = 1 byte
+name data   = 3 bytes
+city len    = 1 byte
+city data   = 4 bytes
+
+Total ≈ 17 bytes (+ row header, null bitmap etc)
+
+Realistically:
+Row header ~ 5–10 bytes
+So approx 25–35 bytes per row.
+
+So 1 page (4096 bytes) me approx:
+    4096 / 35 ≈ 110 rows
+
+Table pages me rows sequentially store hote hain.
+Koi sorting nahi hoti.
+
+
+--------------------------------------------------------
+3) PRIMARY KEY INDEX KA STORAGE
+--------------------------------------------------------
+
+Primary key par B-Tree banta hai.
+
+Index alag pages me store hota hai.
+Index pages bhi 4KB ke hote hain.
+
+Important:
+InnoDB me PRIMARY KEY actually clustered hota hai.
+Matlab:
+    Table data hi B-Tree me store hota hai.
+    Heap alag nahi hota.
+
+Lekin generic explanation ke liye assume karte hain:
+
+    Table pages separate
+    Index pages separate
+
+
+--------------------------------------------------------
+4) B-TREE STRUCTURE ON DISK
+--------------------------------------------------------
+
+Suppose 1000 students hain.
+
+B-Tree structure:
+
+Level 0: Root page
+Level 1: Internal pages
+Level 2: Leaf pages
+
+All pages are stored somewhere among 1280 pages.
+
+Example:
+
+Page 50  → Root
+Page 120 → Internal node
+Page 121 → Internal node
+Page 200 → Leaf
+Page 201 → Leaf
+Page 202 → Leaf
+
+
+--------------------------------------------------------
+5) INDEX BLOCK ME KYA STORED HOTA HAI?
+--------------------------------------------------------
+
+Leaf Page structure:
+
++--------------------------------+
+| Page Header                    |
+| Key 1 | Row Pointer            |
+| Key 2 | Row Pointer            |
+| Key 3 | Row Pointer            |
+| ...                            |
+| Next Leaf Page Number          |
+| Prev Leaf Page Number          |
++--------------------------------+
+
+Index entry:
+
+rno (INT = 4 bytes)
++
+RowID (pointer to table row)
+
+RowID kya hota hai?
+
+Usually:
+    (Page Number + Slot Number)
+
+Example:
+    Page 300
+    Slot 25
+
+To RowID = (300,25)
+
+Ye actual disk location ka logical reference hota hai.
+Physical disk offset directly nahi store hota.
+
+
+--------------------------------------------------------
+6) DISK LOCATION STORAGE SIZE
+--------------------------------------------------------
+
+Total pages = 1280
+
+To page number store karne ke liye:
+    1280 < 2^11
+So 2 bytes enough (max 65535 pages)
+
+Slot number bhi 2 bytes me aa sakta hai.
+
+So RowID ≈ 4 bytes
+
+Index entry size:
+    rno (4 bytes)
+    RowID (4 bytes)
+Total = 8 bytes per index entry
+
+Plus some overhead.
+
+To ek 4KB page me:
+    4096 / 8 ≈ 500 index entries
+
+Isliye B-Tree height bahut chhoti hoti hai.
+
+
+--------------------------------------------------------
+7) INTERNAL NODE ME KYA STORE HOTA HAI?
+--------------------------------------------------------
+
+Internal node me:
+
+Key values
++
+Child page numbers
+
+Example:
+
+[ 50 | 100 | 150 ]
+Pointers:
+    child_page_1
+    child_page_2
+    child_page_3
+    child_page_4
+
+Yeh table row pointer nahi hota.
+Yeh next index page ka pointer hota hai.
+
+
+--------------------------------------------------------
+8) LEAF NODES LINKED LIST
+--------------------------------------------------------
+
+Leaf pages me extra fields:
+
+prev_page_number
+next_page_number
+
+Ye bhi 2-4 bytes ke numbers hote hain.
+
+Isliye leaf pages doubly linked list me connected hote hain.
+
+Range query ke liye powerful.
+
+
+--------------------------------------------------------
+9) COMPLETE FLOW (SEARCH)
+--------------------------------------------------------
+
+Search rno = 103
+
+Step 1:
+    Load root page (Page 50)
+
+Step 2:
+    Compare keys
+    Jump to child page (say Page 120)
+
+Step 3:
+    Reach leaf page (Page 200)
+
+Step 4:
+    Binary search inside leaf page
+
+Step 5:
+    Get RowID = (Page 300, Slot 25)
+
+Step 6:
+    Load Page 300
+    Read Slot 25
+    Fetch actual record
+
+
+--------------------------------------------------------
+10) IMPORTANT INSIGHT
+--------------------------------------------------------
+
+Disk directly byte-offset based access nahi karta.
+
+Sab kuch page based hota hai.
+
+Page number fixed size ka hota hai.
+Isliye disk location ka size fixed hota hai.
+
+5MB disk me page numbers small honge.
+1TB disk me page number bigger ho sakta hai.
+But fixed-size field hota hai.
+
+
+--------------------------------------------------------
+FINAL MENTAL MODEL
+--------------------------------------------------------
+
+Disk (5MB)
+    ↓
+Divided into 1280 pages (4KB each)
+
+Some pages:
+    Table data (heap)
+Some pages:
+    Index (B-Tree nodes)
+
+Index leaf page:
+    Sorted keys
+    + RowID pointers
+    + Prev/Next page number
+
+Table page:
+    Actual row data
+    Unsorted
+    Stored with row header + data
+
+Index = navigation map
+Table = actual data storage
