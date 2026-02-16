@@ -1,0 +1,207 @@
+FLOAT DATA TYPE – INTERNAL BEHAVIOR AND PRECISION
+
+1) What is FLOAT?
+
+FLOAT is an approximate numeric data type.
+It does NOT store decimal numbers exactly.
+It stores numbers using IEEE-754 binary floating-point format.
+
+In MariaDB / MySQL:
+
+    FLOAT  → 4 bytes (32-bit, single precision)
+    DOUBLE → 8 bytes (64-bit, double precision)
+
+FLOAT gives roughly 7 significant decimal digits of precision.
+
+
+------------------------------------------------------------
+2) Why FLOAT shows "incorrect" values
+------------------------------------------------------------
+
+Example:
+
+CREATE TABLE test_float (
+    val FLOAT
+);
+
+INSERT INTO test_float VALUES (9999998);
+INSERT INTO test_float VALUES (1112121212);
+
+SELECT val FROM test_float;
+
+Possible output:
+
++------------+
+| val        |
++------------+
+| 10000000   |
+| 1112121216 |
++------------+
+
+Explanation:
+
+FLOAT can represent only about 7 significant digits.
+Numbers beyond that are rounded to the nearest representable
+binary value.
+
+The database did NOT randomly round.
+The closest IEEE-754 binary value to 9999998
+may actually decode to 10000000 when printed.
+
+
+------------------------------------------------------------
+3) IEEE-754 (32-bit FLOAT) Structure
+------------------------------------------------------------
+
+A 32-bit float is stored as:
+
+| 1 bit | 8 bits   | 23 bits      |
+| Sign  | Exponent | Mantissa     |
+
+Value formula:
+
+(-1)^Sign × 1.Mantissa × 2^(Exponent - 127)
+
+Example: Storing 90.9
+
+Step 1: Convert to binary (approximate)
+Step 2: Normalize to form 1.xxxxx × 2^n
+Step 3: Store:
+
+Sign      = 0
+Exponent  = n + 127
+Mantissa  = fractional part after leading 1
+
+Binary (little-endian in memory):
+42 B5 CC CD
+
+Which equals:
+90.9000015258789 (approx)
+
+That tiny difference is normal.
+
+
+------------------------------------------------------------
+4) Why 9999998 becomes 10000000
+------------------------------------------------------------
+
+9999998 requires more precision than 23 mantissa bits allow.
+
+Binary float stores nearest possible binary value.
+Nearest representable float might decode to:
+
+10000000
+
+FLOAT stores approximation.
+Display shows stored approximation.
+
+
+------------------------------------------------------------
+5) CHECK constraint does NOT change storage
+------------------------------------------------------------
+
+CREATE TABLE t (
+    val FLOAT CHECK (val >= 0 AND val <= 100)
+);
+
+Storage size remains 4 bytes.
+
+CHECK only validates input.
+It does NOT compress data.
+
+
+------------------------------------------------------------
+6) FLOAT(M,D) Behavior
+------------------------------------------------------------
+
+ALTER TABLE test_float
+MODIFY COLUMN val FLOAT(7,2);
+
+FLOAT(7,2) means:
+
+M = total digits
+D = digits after decimal
+
+So:
+    max value ≈ 99999.99
+
+This affects range validation and display formatting.
+Storage remains 4 bytes.
+
+Example:
+
+INSERT INTO test_float VALUES (90000.99);  -- OK
+INSERT INTO test_float VALUES (900000.99); -- Out of range
+
+
+------------------------------------------------------------
+7) DECIMAL(n,d) – Exact Numeric Type
+------------------------------------------------------------
+
+CREATE TABLE test_decimal (
+    val DECIMAL(7,2)
+);
+
+DECIMAL(7,2):
+
+- 7 total digits
+- 2 digits after decimal
+- Stored in base-10 format (exact)
+
+Example:
+
+INSERT INTO test_decimal VALUES (99999.99);
+SELECT val FROM test_decimal;
+
+Result:
+99999.99  (exact, no rounding error)
+
+DECIMAL stores numbers as scaled integers internally.
+No IEEE approximation.
+
+
+------------------------------------------------------------
+8) Difference Between FLOAT and DECIMAL
+------------------------------------------------------------
+
+| Feature       | FLOAT              | DECIMAL           |
++---------------+--------------------+-------------------+
+| Precision     | Approximate        | Exact             |
+| Storage       | 4 bytes fixed      | Variable bytes    |
+| Representation| Binary (base-2)    | Decimal (base-10) |
+| Finance safe? | No                 | Yes               |
+| Fast math     | Yes                | Slightly slower   |
+
+
+------------------------------------------------------------
+9) Demonstration of Precision Loss
+------------------------------------------------------------
+
+CREATE TABLE demo_float(val FLOAT);
+INSERT INTO demo_float VALUES (0.1);
+INSERT INTO demo_float VALUES (0.2);
+
+SELECT 0.1 + 0.2;
+-- Result may be 0.300000012 (approx)
+
+Because 0.1 and 0.2 cannot be exactly represented in binary.
+
+
+------------------------------------------------------------
+10) Summary
+------------------------------------------------------------
+
+FLOAT:
+    - Uses IEEE-754 32-bit representation
+    - Approximate
+    - ~7 significant digits
+    - Good for scientific data
+
+DECIMAL:
+    - Exact base-10 storage
+    - No rounding surprises
+    - Required for finance
+
+Important Rule:
+    If exact decimal precision matters → use DECIMAL.
+    If approximation is acceptable → use FLOAT.
