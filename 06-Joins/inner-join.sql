@@ -251,5 +251,142 @@
     +-------+-----------+
 
 
-    Q. 
+    Q. List all teachers who have taught at least one student.
+    -> select distinct teacher.name
+    from teacher     
+    join student_teacher as st     
+    on teacher.tno = st.tno;
+    
+    +-------------+
+    | name        |
+    +-------------+
+    | Mehta Sir   |
+    | Roy Maam    |
+    | Patil Sir   |
+    | Sharma Maam |
+    +-------------+
+
+
+    Q.Show all students who have attended at least one lecture.
+    ->select distinct student.name
+    from student
+    join on student_teacher as st
+    on student.rno = st.rno;
+
+    +-------+
+    | name  |
+    +-------+
+    | Amit  |
+    | Sneha |
+    | Meera |
+    | Zara  |
+    | Neha  |
+    | Rohit |
+    | Rhea  |
+    | Rohan |
+    | Vikas |
+    | Aman  |
+    +-------+
+
+
+    Q. Show student name, teacher name,
+    but only for lectures held on '2025-01-01'.
+
+    -> select student.name, teacher.name
+    from student 
+    join student_teacher as st
+        on student.rno = st.rno
+    join teacher
+        on st.tno = teacher.tno
+    where st.l_date = '2025-01-01';
+
+    +-------+-------------+
+    | name  | name        |
+    +-------+-------------+
+    | Amit  | Mehta Sir   |
+    | Sneha | Mehta Sir   |
+    | Neha  | Roy Maam    |
+    | Rohan | Patil Sir   |
+    | Aman  | Sharma Maam |
+    +-------+-------------+
+
+
+
+
+    Q. Show all students who were taught by teachers
+        from the same city as the student.
+
+    -> select student.name, teacher.name, student.city
+    from student
+    join student_teacher as st
+        on st.rno = student.rno
+    join teacher
+        on st.tno =  teacher.tno
+    where student.city = teacher.city;
+
+    +-------+-----------+--------+
+    | name  | name      | city   |
+    +-------+-----------+--------+
+    | Amit  | Mehta Sir | Pune   |
+    | Amit  | Mehta Sir | Pune   |
+    | Sneha | Mehta Sir | Pune   |
+    | Neha  | Roy Maam  | Mumbai |
+    | Rohit | Roy Maam  | Mumbai |
+    | Rohan | Patil Sir | Delhi  |
+    +-------+-----------+--------+
+
+
+
+    Q. Count how many lectures each student attended.
+    
+    -> select student.name, count(*)
+    from student
+    join student_teacher as st
+    on student.rno = st.rno
+    group by student.rno, student.name; 
+
+    +-------+----------+
+    | name  | count(*) |
+    +-------+----------+
+    | Amit  |        3 |
+    | Neha  |        2 |
+    | Rohan |        2 |
+    | Sneha |        2 |
+    | Vikas |        1 |
+    | Rohit |        2 |
+    | Meera |        1 |
+    | Aman  |        2 |
+    | Rhea  |        1 |
+    | Zara  |        2 |
+    +-------+----------+
+
+
+
+    Q. Count how many students each teacher has taught.
+    -> select distinct teacher.name, count(*) as students_taught
+    from teacher
+    join student_teacher as st
+    on teacher.tno = st.tno
+    group by st.rno,teacher.tno, teacher.name;
+
+    +-------------+-----------------+
+    | name        | students_taught |
+    +-------------+-----------------+
+    | Mehta Sir   |               2 |
+    | Roy Maam    |               1 |
+    | Patil Sir   |               1 |
+    | Sharma Maam |               1 |
+    | Mehta Sir   |               1 |
+    | Sharma Maam |               2 |
+    +-------------+-----------------+
+
+
+    Q. Show student name and number of different teachers
+        they have attended.
+
+    -> select student.name, 
+
+
+    select student.name from student_teacher join (       select max(l_date) as last_lecture from student_teacher as st     ) as X on student_teacher.l_date = X.last_lecture;
+
 
