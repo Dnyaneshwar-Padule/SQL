@@ -384,9 +384,41 @@
     Q. Show student name and number of different teachers
         they have attended.
 
-    -> select student.name, 
+    -> select distinct student.name, count(*) as number_of_different_teachers_attended
+    from student
+    join student_teacher as st
+    on student.rno = st.rno
+    group by student.rno, st.tno, student.name;
+
+    +-------+---------------------------------------+
+    | name  | number_of_different_teachers_attended |
+    +-------+---------------------------------------+
+    | Amit  |                                     2 |
+    | Amit  |                                     1 |
+    | Neha  |                                     1 |
+    | Rohan |                                     1 |
+    | Sneha |                                     1 |
+    | Vikas |                                     1 |
+    | Rohit |                                     1 |
+    | Meera |                                     1 |
+    | Aman  |                                     2 |
+    | Rhea  |                                     1 |
+    | Zara  |                                     1 |
+    +-------+---------------------------------------+
+
+
+
+/*
+
+    Q. Show students who attended more than 2 lectures.
+    -> select distinct student.name, tno, l_date
+    from student
+    join student_teacher as st
+    on student.rno = st.rno;
+
 
 
     select student.name from student_teacher join (       select max(l_date) as last_lecture from student_teacher as st     ) as X on student_teacher.l_date = X.last_lecture;
 
+*/
 
